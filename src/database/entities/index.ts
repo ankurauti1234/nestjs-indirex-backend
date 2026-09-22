@@ -18,3 +18,5 @@ export * from './region.entity.js';
 export * from './field-executive.entity.js';
 export * from './device-batch.entity.js';
 export * from './device-batch-item.entity.js';
+export * from './household-device-history.entity.js';
+

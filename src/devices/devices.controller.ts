@@ -19,6 +19,7 @@ import {
   CreateCertificateDto,
   DeviceQueryDto,
 } from './dto/device.dto.js';
+import { HouseholdHistoryQueryDto } from '../households/dto/household-history.dto.js';
 
 @ApiTags('Devices')
 @ApiCookieAuth('auth_session')
@@ -108,5 +109,17 @@ export class DevicesController {
     @Body() dto: CreateCertificateDto,
   ) {
     return this.devicesService.createCertificate(id, dto);
+  }
+
+  @Get(':id/installation-history')
+  @RequirePermission('devices:read')
+  @ApiOperation({ summary: 'Get household deployment & replacement history for a specific hardware device unit' })
+  @ApiResponse({ status: 200, description: 'Paginated installation history entries for this device' })
+  @ApiResponse({ status: 404, description: 'Device not found' })
+  async findInstallationHistory(
+    @Param('id') id: string,
+    @Query() queryDto: HouseholdHistoryQueryDto,
+  ) {
+    return this.devicesService.findInstallationHistory(id, queryDto);
   }
 }

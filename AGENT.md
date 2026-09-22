@@ -84,6 +84,7 @@ All collection endpoints (`GET /devices`, `GET /users`, `GET /households`, `GET 
 - **`Household` (`households`)**: Master household (`hhId` PK, `region`, `totalTvs` dynamic count of TVs in `household_tvs`, max 5 TVs limit per household).
 - **`HouseholdMember` (`household_members`)**: Scoped member records (`M1`, `M2`...).
 - **`HouseholdTv` (`household_tvs`)**: Scoped TV sets (`TV1`, `TV2`... up to max 5 TVs per household). Linked to `installedDeviceId` (`devices.device_id`).
+- **`HouseholdDeviceHistory` (`household_device_history`)**: Immutable installation audit log tracking device deployment, replacement (`previousDeviceId` $\to$ `deviceId`), uninstallation events, and field executive metadata. Access via `GET /households/:hhId/installation-history/roadmap`.
 
 ### Dashboard Analytics & KPI Engine
 - **Endpoint**: `GET /dashboard/overview`

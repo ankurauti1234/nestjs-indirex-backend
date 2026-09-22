@@ -21,6 +21,7 @@ import {
   FieldExecutive,
   DeviceBatch,
   DeviceBatchItem,
+  HouseholdDeviceHistory,
 } from './entities/index.js';
 
 @Module({
@@ -55,6 +56,7 @@ import {
               FieldExecutive,
               DeviceBatch,
               DeviceBatchItem,
+              HouseholdDeviceHistory,
             ],
             synchronize: true,
             logging: false,
@@ -93,6 +95,7 @@ import {
             FieldExecutive,
             DeviceBatch,
             DeviceBatchItem,
+            HouseholdDeviceHistory,
           ],
           synchronize: process.env.DB_SYNCHRONIZE !== 'false',
           logging: process.env.DB_LOGGING === 'true',
@@ -120,6 +123,7 @@ import {
       FieldExecutive,
       DeviceBatch,
       DeviceBatchItem,
+      HouseholdDeviceHistory,
     ]),
   ],
   exports: [TypeOrmModule],

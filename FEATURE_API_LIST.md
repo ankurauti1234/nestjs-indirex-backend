@@ -66,6 +66,7 @@ This document serves as the master catalog of all database entities, operational
 | `DELETE` | `/devices/:id` | `devices:delete` | Delete or decommission hardware device. |
 | `POST` | `/devices/:id/tokens` | `devices:write` | Issue ephemeral claim token or OTP verification code. |
 | `POST` | `/devices/:id/certificates` | `devices:write` | Register AWS IoT Certificate and rotation trail. |
+| `GET` | `/devices/:id/installation-history` | `devices:read` | Retrieve household deployment, swap, and replacement history for a specific hardware device unit. |
 
 ---
 
@@ -98,8 +99,11 @@ This document serves as the master catalog of all database entities, operational
 | `GET` | `/households/:hhId/tvs` | `households:read` | List TV sets in household (`TV1`, `TV2`...). |
 | `GET` | `/households/:hhId/tvs/:tvId` | `households:read` | Get single TV set details. |
 | `POST` | `/households/:hhId/tvs` | `households:write` | Add TV set to household (Enforces max 5 TVs limit). |
-| `PATCH` | `/households/:hhId/tvs/:tvId` | `households:write` | Update TV set specs or assign/unassign telemetry device (`installedDeviceId`). |
+| `PATCH` | `/households/:hhId/tvs/:tvId` | `households:write` | Update TV set specs or assign/unassign telemetry device (Auto-logs history event). |
 | `DELETE` | `/households/:hhId/tvs/:tvId` | `households:write` | Delete TV set from household. |
+| `GET` | `/households/:hhId/installation-history` | `households:read` | List installation, replacement, and uninstallation history log entries (paginated, filters by `tvId`, `deviceId`, `actionType`, date range). |
+| `GET` | `/households/:hhId/installation-history/roadmap` | `households:read` | Retrieve structured installation roadmap timeline grouped by TV set. |
+| `POST` | `/households/:hhId/installation-history` | `households:write` | Log a device installation, replacement, or uninstallation history record manually. |
 
 ---
 
@@ -176,6 +180,7 @@ This document serves as the master catalog of all database entities, operational
 | `Household` | `households` | `hhId` (PK e.g. `HH1000`), `totalTvs` (Count of TVs in `household_tvs`, Max 5 TVs per HH) |
 | `HouseholdMember` | `household_members` | `id` (UUID PK), `(hh_id, member_id)` (UK) |
 | `HouseholdTv` | `household_tvs` | `id` (UUID PK), `(hh_id, tv_id)` (UK), `installedDeviceId` (FK) |
+| `HouseholdDeviceHistory` | `household_device_history` | `id` (UUID PK), `hhId` (FK), `deviceId` (FK), `previousDeviceId` (FK), `actionType` (`INSTALLED`/`REPLACED`/`UNINSTALLED`/`MAINTENANCE`) |
 | `EventType` | `event_types` | `id` (Integer PK 1..24), `name` (UK) |
 | `DeviceEvent` | `device_events` | `id` (UUID PK), `(hh_id, recorded_at)`, `(device_id, recorded_at)` compound time-series indexes |
 | `Region` | `regions` | `id` (Integer PK), `name` (UK), `code` (UK) |

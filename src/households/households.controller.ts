@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiCookieAuth } from '@nestjs/swagger';
 import { HouseholdsService } from './households.service.js';
+import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { RequirePermission } from '../auth/decorators/require-permission.decorator.js';
 import { HouseholdQueryDto, HouseholdMemberQueryDto } from './dto/household.dto.js';
 import {
@@ -17,6 +18,10 @@ import {
   UpdateHouseholdTvDto,
   HouseholdTvQueryDto,
 } from './dto/household-tv.dto.js';
+import {
+  CreateHouseholdDeviceHistoryDto,
+  HouseholdHistoryQueryDto,
+} from './dto/household-history.dto.js';
 
 @ApiTags('Households & Members')
 @ApiCookieAuth('auth_session')
@@ -128,5 +133,41 @@ export class HouseholdsController {
     @Param('tvId') tvId: string,
   ) {
     return this.householdsService.removeTv(hhId, tvId);
+  }
+
+  // --- Household Installation History & Roadmap Endpoints ---
+
+  @Get(':hhId/installation-history')
+  @RequirePermission('households:read')
+  @ApiOperation({ summary: 'List installation, replacement, and uninstallation history for a household' })
+  @ApiResponse({ status: 200, description: 'Paginated installation history log entries' })
+  @ApiResponse({ status: 404, description: 'Household not found' })
+  async findInstallationHistory(
+    @Param('hhId') hhId: string,
+    @Query() queryDto: HouseholdHistoryQueryDto,
+  ) {
+    return this.householdsService.findInstallationHistory(hhId, queryDto);
+  }
+
+  @Get(':hhId/installation-history/roadmap')
+  @RequirePermission('households:read')
+  @ApiOperation({ summary: 'Get structured installation roadmap and lifecycle timeline by TV set' })
+  @ApiResponse({ status: 200, description: 'Structured roadmap timeline grouped by TV set' })
+  @ApiResponse({ status: 404, description: 'Household not found' })
+  async getInstallationRoadmap(@Param('hhId') hhId: string) {
+    return this.householdsService.getInstallationRoadmap(hhId);
+  }
+
+  @Post(':hhId/installation-history')
+  @RequirePermission('households:write')
+  @ApiOperation({ summary: 'Log a device installation, replacement, or uninstallation history record' })
+  @ApiResponse({ status: 201, description: 'Installation history record created successfully' })
+  @ApiResponse({ status: 404, description: 'Household not found' })
+  async logInstallationHistory(
+    @Param('hhId') hhId: string,
+    @Body() dto: CreateHouseholdDeviceHistoryDto,
+    @CurrentUser('id') userId?: string,
+  ) {
+    return this.householdsService.logInstallationHistory(hhId, dto, userId);
   }
 }

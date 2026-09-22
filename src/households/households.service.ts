@@ -13,6 +13,8 @@ import {
   HouseholdTv,
   Device,
   Gender,
+  HouseholdDeviceHistory,
+  HouseholdDeviceAction,
 } from '../database/entities/index.js';
 import {
   HouseholdQueryDto,
@@ -23,6 +25,10 @@ import {
   UpdateHouseholdTvDto,
   HouseholdTvQueryDto,
 } from './dto/household-tv.dto.js';
+import {
+  CreateHouseholdDeviceHistoryDto,
+  HouseholdHistoryQueryDto,
+} from './dto/household-history.dto.js';
 import { paginateQueryBuilder } from '../common/utils/pagination.util.js';
 
 export const MAX_ALLOWED_TVS_PER_HOUSEHOLD = 5;
@@ -38,6 +44,8 @@ export class HouseholdsService implements OnModuleInit {
     private readonly tvRepository: Repository<HouseholdTv>,
     @InjectRepository(Device)
     private readonly deviceRepository: Repository<Device>,
+    @InjectRepository(HouseholdDeviceHistory)
+    private readonly historyRepository: Repository<HouseholdDeviceHistory>,
   ) {}
 
   async onModuleInit() {
@@ -357,17 +365,31 @@ export class HouseholdsService implements OnModuleInit {
     const updatedCount = await this.tvRepository.count({ where: { hhId } });
     await this.householdRepository.update(hhId, { totalTvs: updatedCount });
 
+    // Auto-log INSTALLED event if a device was installed
+    if (savedTv.installedDeviceId) {
+      await this.logInstallationHistory(hhId, {
+        tvId: savedTv.tvId,
+        deviceId: savedTv.installedDeviceId,
+        actionType: HouseholdDeviceAction.INSTALLED,
+        reason: 'TV creation & device installation',
+      });
+    }
+
     return this.findOneTv(hhId, savedTv.tvId);
   }
 
   async updateTv(hhId: string, tvId: string, dto: UpdateHouseholdTvDto) {
     const tv = await this.findOneTv(hhId, tvId);
+    const previousDeviceId = tv.installedDeviceId;
 
     if (dto.location !== undefined) tv.location = dto.location;
     if (dto.brand !== undefined) tv.brand = dto.brand;
     if (dto.model !== undefined) tv.model = dto.model;
     if (dto.screenSizeInches !== undefined)
       tv.screenSizeInches = dto.screenSizeInches;
+
+    let deviceChanged = false;
+    let newDeviceId: string | undefined;
 
     if (dto.installedDeviceId !== undefined) {
       if (dto.installedDeviceId && dto.installedDeviceId.trim() !== '') {
@@ -379,19 +401,64 @@ export class HouseholdsService implements OnModuleInit {
             `Device with ID '${dto.installedDeviceId}' not found`,
           );
         }
-        tv.installedDeviceId = dto.installedDeviceId;
+        newDeviceId = dto.installedDeviceId;
       } else {
-        tv.installedDeviceId = undefined;
+        newDeviceId = undefined;
+      }
+
+      if (previousDeviceId !== newDeviceId) {
+        deviceChanged = true;
+        tv.installedDeviceId = newDeviceId;
       }
     }
 
     await this.tvRepository.save(tv);
+
+    // Auto-log history events when device assignment changes
+    if (deviceChanged) {
+      if (!previousDeviceId && newDeviceId) {
+        await this.logInstallationHistory(hhId, {
+          tvId,
+          deviceId: newDeviceId,
+          actionType: HouseholdDeviceAction.INSTALLED,
+          reason: 'Device installed on TV set',
+        });
+      } else if (previousDeviceId && newDeviceId) {
+        await this.logInstallationHistory(hhId, {
+          tvId,
+          deviceId: newDeviceId,
+          previousDeviceId,
+          actionType: HouseholdDeviceAction.REPLACED,
+          reason: 'Device replaced on TV set',
+        });
+      } else if (previousDeviceId && !newDeviceId) {
+        await this.logInstallationHistory(hhId, {
+          tvId,
+          deviceId: previousDeviceId,
+          actionType: HouseholdDeviceAction.UNINSTALLED,
+          reason: 'Device uninstalled from TV set',
+        });
+      }
+    }
+
     return this.findOneTv(hhId, tv.tvId);
   }
 
   async removeTv(hhId: string, tvId: string) {
     const tv = await this.findOneTv(hhId, tvId);
+    const uninstalledDeviceId = tv.installedDeviceId;
+
     await this.tvRepository.remove(tv);
+
+    // Auto-log UNINSTALLED if TV had a device installed
+    if (uninstalledDeviceId) {
+      await this.logInstallationHistory(hhId, {
+        tvId,
+        deviceId: uninstalledDeviceId,
+        actionType: HouseholdDeviceAction.UNINSTALLED,
+        reason: 'TV set deleted from household',
+      });
+    }
 
     // Update totalTvs count on Household
     const updatedCount = await this.tvRepository.count({ where: { hhId } });
@@ -401,5 +468,140 @@ export class HouseholdsService implements OnModuleInit {
       success: true,
       message: `TV set '${tvId}' deleted successfully from household '${hhId}'`,
     };
+  }
+
+  // --- Household Device Installation History & Roadmap APIs ---
+
+  async logInstallationHistory(
+    hhId: string,
+    dto: CreateHouseholdDeviceHistoryDto,
+    userId?: string,
+  ) {
+    await this.findOne(hhId);
+
+    const history = this.historyRepository.create({
+      hhId,
+      tvId: dto.tvId || undefined,
+      deviceId: dto.deviceId,
+      previousDeviceId: dto.previousDeviceId || undefined,
+      actionType: dto.actionType || HouseholdDeviceAction.INSTALLED,
+      actionDate: dto.actionDate ? new Date(dto.actionDate) : new Date(),
+      reason: dto.reason || undefined,
+      fieldExecutiveId: dto.fieldExecutiveId || undefined,
+      performedByUserId: userId || undefined,
+      notes: dto.notes || undefined,
+    });
+
+    return this.historyRepository.save(history);
+  }
+
+  async findInstallationHistory(
+    hhId: string,
+    queryDto: HouseholdHistoryQueryDto = new HouseholdHistoryQueryDto(),
+  ) {
+    await this.findOne(hhId);
+
+    const qb = this.historyRepository
+      .createQueryBuilder('history')
+      .leftJoinAndSelect('history.device', 'device')
+      .where('history.hhId = :hhId', { hhId });
+
+    if (queryDto.tvId) {
+      qb.andWhere('history.tvId = :tvId', { tvId: queryDto.tvId });
+    }
+
+    if (queryDto.deviceId) {
+      qb.andWhere('history.deviceId = :deviceId', { deviceId: queryDto.deviceId });
+    }
+
+    if (queryDto.actionType) {
+      qb.andWhere('history.actionType = :actionType', {
+        actionType: queryDto.actionType,
+      });
+    }
+
+    if (queryDto.startDate) {
+      qb.andWhere('history.actionDate >= :startDate', {
+        startDate: new Date(queryDto.startDate),
+      });
+    }
+
+    if (queryDto.endDate) {
+      qb.andWhere('history.actionDate <= :endDate', {
+        endDate: new Date(queryDto.endDate),
+      });
+    }
+
+    if (queryDto.search) {
+      qb.andWhere(
+        '(history.deviceId LIKE :search OR history.tvId LIKE :search OR history.reason LIKE :search)',
+        { search: `%${queryDto.search}%` },
+      );
+    }
+
+    const sortOrder = queryDto.sortOrder === 'ASC' ? 'ASC' : 'DESC';
+    const sortBy = queryDto.sortBy ? `history.${queryDto.sortBy}` : 'history.actionDate';
+    qb.orderBy(sortBy, sortOrder);
+
+    return paginateQueryBuilder(qb, queryDto);
+  }
+
+  async getInstallationRoadmap(hhId: string) {
+    const household = await this.findOne(hhId);
+    const historyEntries = await this.historyRepository.find({
+      where: { hhId },
+      order: { actionDate: 'ASC' },
+    });
+
+    const tvMap = new Map<string, any[]>();
+    historyEntries.forEach((entry) => {
+      const key = entry.tvId || 'UNASSIGNED';
+      if (!tvMap.has(key)) {
+        tvMap.set(key, []);
+      }
+      tvMap.get(key)!.push(entry);
+    });
+
+    const tvRoadmaps = (household.tvs || []).map((tv) => {
+      const timeline = tvMap.get(tv.tvId) || [];
+      return {
+        tvId: tv.tvId,
+        location: tv.location,
+        brand: tv.brand,
+        currentDeviceId: tv.installedDeviceId || null,
+        timeline,
+      };
+    });
+
+    return {
+      hhId,
+      totalTvs: household.totalTvs,
+      totalHistoryEvents: historyEntries.length,
+      tvs: tvRoadmaps,
+      unassignedEvents: tvMap.get('UNASSIGNED') || [],
+    };
+  }
+
+  async findDeviceInstallationHistory(
+    deviceId: string,
+    queryDto: HouseholdHistoryQueryDto = new HouseholdHistoryQueryDto(),
+  ) {
+    const qb = this.historyRepository
+      .createQueryBuilder('history')
+      .where('(history.deviceId = :deviceId OR history.previousDeviceId = :deviceId)', {
+        deviceId,
+      });
+
+    if (queryDto.actionType) {
+      qb.andWhere('history.actionType = :actionType', {
+        actionType: queryDto.actionType,
+      });
+    }
+
+    const sortOrder = queryDto.sortOrder === 'ASC' ? 'ASC' : 'DESC';
+    const sortBy = queryDto.sortBy ? `history.${queryDto.sortBy}` : 'history.actionDate';
+    qb.orderBy(sortBy, sortOrder);
+
+    return paginateQueryBuilder(qb, queryDto);
   }
 }

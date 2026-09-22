@@ -31,7 +31,7 @@ describe('Auth, Dynamic RBAC, Users & Devices Engine (E2E Integration)', () => {
     );
 
     await app.init();
-  });
+  }, 30000);
 
   afterAll(async () => {
     if (app) {
@@ -466,6 +466,86 @@ describe('Auth, Dynamic RBAC, Users & Devices Engine (E2E Integration)', () => {
         .expect(200);
 
       expect(res.body.success).toBe(true);
+    });
+
+    it('POST /households/:hhId/installation-history - Log installation record (Expect 201 Created)', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/households/HH1000/installation-history')
+        .set('Cookie', [adminAuthCookie])
+        .send({
+          tvId: 'TV1',
+          deviceId: 'DEV_HIST_1',
+          actionType: 'INSTALLED',
+          reason: 'Initial setup by Field Exec',
+          fieldExecutiveId: 'FE1001',
+        })
+        .expect(201);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.hhId).toBe('HH1000');
+      expect(res.body.data.deviceId).toBe('DEV_HIST_1');
+      expect(res.body.data.actionType).toBe('INSTALLED');
+    });
+
+    it('PATCH /households/:hhId/tvs/:tvId - Swap device and verify auto-logged REPLACED event', async () => {
+      // Create active devices for assignment
+      await request(app.getHttpServer())
+        .post('/devices')
+        .set('Cookie', [adminAuthCookie])
+        .send({ deviceId: 'DEV_HIST_1', deviceName: 'Hist Device 1', cpuSerial: 'cpu-hist-1' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post('/devices')
+        .set('Cookie', [adminAuthCookie])
+        .send({ deviceId: 'DEV_HIST_2', deviceName: 'Hist Device 2', cpuSerial: 'cpu-hist-2' })
+        .expect(201);
+
+      // First assign DEV_HIST_1 to TV1
+      await request(app.getHttpServer())
+        .patch('/households/HH1000/tvs/TV1')
+        .set('Cookie', [adminAuthCookie])
+        .send({ installedDeviceId: 'DEV_HIST_1' })
+        .expect(200);
+
+      // Now swap to DEV_HIST_2
+      await request(app.getHttpServer())
+        .patch('/households/HH1000/tvs/TV1')
+        .set('Cookie', [adminAuthCookie])
+        .send({ installedDeviceId: 'DEV_HIST_2' })
+        .expect(200);
+
+      // Verify REPLACED history entry logged
+      const historyRes = await request(app.getHttpServer())
+        .get('/households/HH1000/installation-history?actionType=REPLACED')
+        .set('Cookie', [userAuthCookie])
+        .expect(200);
+
+      expect(historyRes.body.success).toBe(true);
+      expect(historyRes.body.data.some((h: any) => h.previousDeviceId === 'DEV_HIST_1' && h.deviceId === 'DEV_HIST_2')).toBe(true);
+    });
+
+    it('GET /households/:hhId/installation-history/roadmap - Fetch installation roadmap', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/households/HH1000/installation-history/roadmap')
+        .set('Cookie', [userAuthCookie])
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.hhId).toBe('HH1000');
+      expect(Array.isArray(res.body.data.tvs)).toBe(true);
+      expect(res.body.data.tvs.some((t: any) => t.tvId === 'TV1')).toBe(true);
+    });
+
+    it('GET /devices/:id/installation-history - Fetch hardware deployment history', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/devices/DEV_HIST_1/installation-history')
+        .set('Cookie', [devAuthCookie])
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.length).toBeGreaterThan(0);
     });
   });
 

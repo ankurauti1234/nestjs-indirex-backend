@@ -9,6 +9,8 @@ import {
   DeviceOperation,
 } from '../database/entities/index.js';
 
+import { HouseholdsModule } from '../households/households.module.js';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -17,6 +19,7 @@ import {
       DeviceCertificate,
       DeviceOperation,
     ]),
+    HouseholdsModule,
   ],
   controllers: [DevicesController],
   providers: [DevicesService],

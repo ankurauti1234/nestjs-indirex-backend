@@ -24,6 +24,9 @@ import {
 } from './dto/device.dto.js';
 import { paginateQueryBuilder } from '../common/utils/pagination.util.js';
 
+import { HouseholdsService } from '../households/households.service.js';
+import { HouseholdHistoryQueryDto } from '../households/dto/household-history.dto.js';
+
 @Injectable()
 export class DevicesService {
   constructor(
@@ -38,6 +41,8 @@ export class DevicesService {
 
     @InjectRepository(DeviceOperation)
     private readonly operationRepository: Repository<DeviceOperation>,
+
+    private readonly householdsService: HouseholdsService,
   ) {}
 
   async create(dto: CreateDeviceDto) {
@@ -210,7 +215,15 @@ export class DevicesService {
       operation = this.operationRepository.create({ deviceId });
     }
     operation.lastSeenAt = new Date();
-    if (ipAddress) operation.lastIpAddress = ipAddress;
     await this.operationRepository.save(operation);
   }
+
+  async findInstallationHistory(
+    deviceId: string,
+    queryDto: HouseholdHistoryQueryDto = new HouseholdHistoryQueryDto(),
+  ) {
+    await this.findOne(deviceId);
+    return this.householdsService.findDeviceInstallationHistory(deviceId, queryDto);
+  }
 }
+

@@ -7,6 +7,7 @@ import {
   HouseholdMember,
   HouseholdTv,
   Device,
+  HouseholdDeviceHistory,
 } from '../database/entities/index.js';
 
 @Module({
@@ -16,6 +17,7 @@ import {
       HouseholdMember,
       HouseholdTv,
       Device,
+      HouseholdDeviceHistory,
     ]),
   ],
   controllers: [HouseholdsController],
