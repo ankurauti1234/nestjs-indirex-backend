@@ -115,3 +115,4 @@ export class HouseholdHistoryQueryDto extends PaginationQueryDto {
   @IsOptional()
   endDate?: string;
 }
+
