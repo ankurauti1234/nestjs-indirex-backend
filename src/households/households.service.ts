@@ -197,6 +197,7 @@ export class HouseholdsService implements OnModuleInit {
     const sortBy = queryDto.sortBy ? `hh.${queryDto.sortBy}` : 'hh.createdAt';
     qb.orderBy(sortBy, sortOrder);
 
+    return paginateQueryBuilder(qb, queryDto);
     const result = await paginateQueryBuilder(qb, queryDto);
     result.data.forEach((hh) => {
       hh.tvs = hh.tvs || [];
