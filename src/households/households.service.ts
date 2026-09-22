@@ -44,27 +44,51 @@ export class HouseholdsService implements OnModuleInit {
     await this.seedInitialHouseholds();
   }
 
+  private async syncTotalTvs() {
+    const households = await this.householdRepository.find({
+      relations: { tvs: true },
+    });
+    for (const hh of households) {
+      const actualTvCount = hh.tvs ? hh.tvs.length : 0;
+      if (hh.totalTvs !== actualTvCount) {
+        hh.totalTvs = actualTvCount;
+        await this.householdRepository.save(hh);
+      }
+    }
+  }
+
   private async seedInitialHouseholds() {
-    const count = await this.householdRepository.count();
-    if (count === 0) {
-      // Seed initial households HH1000 (1 TV) and HH1001 (2 TVs)
-      const hh1000 = this.householdRepository.create({
+    let hh1000 = await this.householdRepository.findOne({
+      where: { hhId: 'HH1000' },
+    });
+    if (!hh1000) {
+      hh1000 = this.householdRepository.create({
         hhId: 'HH1000',
         region: 'North Zone',
         totalTvs: 1,
         metadata: { district: 'Central' },
       });
       await this.householdRepository.save(hh1000);
+    }
 
-      const hh1001 = this.householdRepository.create({
+    let hh1001 = await this.householdRepository.findOne({
+      where: { hhId: 'HH1001' },
+    });
+    if (!hh1001) {
+      hh1001 = this.householdRepository.create({
         hhId: 'HH1001',
         region: 'South Zone',
         totalTvs: 2,
         metadata: { district: 'Coastal' },
       });
       await this.householdRepository.save(hh1001);
+    }
 
-      // Seed per-household members (M1, M2 per household)
+    // Seed per-household members (M1, M2 per household) if member table is empty for household
+    const memberCount1000 = await this.memberRepository.count({
+      where: { hhId: 'HH1000' },
+    });
+    if (memberCount1000 === 0) {
       const m1 = this.memberRepository.create({
         hhId: 'HH1000',
         memberId: 'M1',
@@ -78,7 +102,13 @@ export class HouseholdsService implements OnModuleInit {
         dob: '1988-08-24',
         gender: Gender.FEMALE,
       });
+      await this.memberRepository.save([m1, m2]);
+    }
 
+    const memberCount1001 = await this.memberRepository.count({
+      where: { hhId: 'HH1001' },
+    });
+    if (memberCount1001 === 0) {
       const m3 = this.memberRepository.create({
         hhId: 'HH1001',
         memberId: 'M1',
@@ -99,10 +129,14 @@ export class HouseholdsService implements OnModuleInit {
         dob: '2015-07-20',
         gender: Gender.MALE,
       });
+      await this.memberRepository.save([m3, m4, m5]);
+    }
 
-      await this.memberRepository.save([m1, m2, m3, m4, m5]);
-
-      // Seed TV sets: HH1000 gets 1 TV, HH1001 gets 2 TVs
+    // Seed TV sets: HH1000 gets 1 TV, HH1001 gets 2 TVs if household_tvs has 0 records
+    const tvCount1000 = await this.tvRepository.count({
+      where: { hhId: 'HH1000' },
+    });
+    if (tvCount1000 === 0) {
       const tv1 = this.tvRepository.create({
         hhId: 'HH1000',
         tvId: 'TV1',
@@ -111,7 +145,13 @@ export class HouseholdsService implements OnModuleInit {
         model: 'QLED 4K 55"',
         screenSizeInches: 55,
       });
+      await this.tvRepository.save(tv1);
+    }
 
+    const tvCount1001 = await this.tvRepository.count({
+      where: { hhId: 'HH1001' },
+    });
+    if (tvCount1001 === 0) {
       const tv2 = this.tvRepository.create({
         hhId: 'HH1001',
         tvId: 'TV1',
@@ -129,9 +169,11 @@ export class HouseholdsService implements OnModuleInit {
         model: 'OLED 43"',
         screenSizeInches: 43,
       });
-
-      await this.tvRepository.save([tv1, tv2, tv3]);
+      await this.tvRepository.save([tv2, tv3]);
     }
+
+    // Sync totalTvs column in households table with actual household_tvs count
+    await this.syncTotalTvs();
   }
 
   async findAll(queryDto: HouseholdQueryDto = new HouseholdQueryDto()) {
@@ -155,7 +197,14 @@ export class HouseholdsService implements OnModuleInit {
     const sortBy = queryDto.sortBy ? `hh.${queryDto.sortBy}` : 'hh.createdAt';
     qb.orderBy(sortBy, sortOrder);
 
-    return paginateQueryBuilder(qb, queryDto);
+    const result = await paginateQueryBuilder(qb, queryDto);
+    result.data.forEach((hh) => {
+      hh.tvs = hh.tvs || [];
+      hh.members = hh.members || [];
+      hh.totalTvs = hh.tvs.length;
+    });
+
+    return result;
   }
 
   async findOne(hhId: string) {
@@ -167,6 +216,10 @@ export class HouseholdsService implements OnModuleInit {
     if (!household) {
       throw new NotFoundException(`Household with ID '${hhId}' not found`);
     }
+
+    household.tvs = household.tvs || [];
+    household.members = household.members || [];
+    household.totalTvs = household.tvs.length;
 
     return household;
   }
