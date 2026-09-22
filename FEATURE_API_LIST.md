@@ -173,7 +173,7 @@ This document serves as the master catalog of all database entities, operational
 | `DeviceOperation` | `device_operations` | `id` (UUID PK), `deviceId` (FK, UK) |
 | `DeviceBatch` | `device_batches` | `id` (UUID PK), `batchId` (UK e.g. `BAT1001`), `type` (`SHARED`/`EXCLUSIVE`/`GLOBAL`) |
 | `DeviceBatchItem` | `device_batch_items` | `id` (UUID PK), `(batch_id, device_id)` (UK) |
-| `Household` | `households` | `hhId` (PK e.g. `HH1000`), `maxTvs` (Default: 5) |
+| `Household` | `households` | `hhId` (PK e.g. `HH1000`), `totalTvs` (Count of TVs in `household_tvs`, Max 5 TVs per HH) |
 | `HouseholdMember` | `household_members` | `id` (UUID PK), `(hh_id, member_id)` (UK) |
 | `HouseholdTv` | `household_tvs` | `id` (UUID PK), `(hh_id, tv_id)` (UK), `installedDeviceId` (FK) |
 | `EventType` | `event_types` | `id` (Integer PK 1..24), `name` (UK) |

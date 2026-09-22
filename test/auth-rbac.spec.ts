@@ -382,7 +382,6 @@ describe('Auth, Dynamic RBAC, Users & Devices Engine (E2E Integration)', () => {
       expect(res.body.success).toBe(true);
       expect(Array.isArray(res.body.data)).toBe(true);
       expect(res.body.data.some((t: any) => t.tvId === 'TV1')).toBe(true);
-      expect(res.body.data.some((t: any) => t.tvId === 'TV2')).toBe(true);
     });
 
     it('GET /households/:hhId/tvs/:tvId - Fetch single TV set detail', async () => {
@@ -429,7 +428,14 @@ describe('Auth, Dynamic RBAC, Users & Devices Engine (E2E Integration)', () => {
     });
 
     it('POST /households/:hhId/tvs - Enforce max 5 TVs limit per household (Expect 400 Bad Request on 6th TV)', async () => {
-      // Add TV4 and TV5 to reach 5 TVs
+      // Currently HH1000 has TV1 and TV3 (2 TVs).
+      // Add TV2, TV4, and TV5 to reach 5 TVs
+      await request(app.getHttpServer())
+        .post('/households/HH1000/tvs')
+        .set('Cookie', [adminAuthCookie])
+        .send({ tvId: 'TV2', location: 'Bedroom' })
+        .expect(201);
+
       await request(app.getHttpServer())
         .post('/households/HH1000/tvs')
         .set('Cookie', [adminAuthCookie])

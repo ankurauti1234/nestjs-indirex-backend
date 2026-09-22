@@ -19,8 +19,8 @@ export class Household {
   @Column({ type: 'varchar', length: 255 })
   region: string;
 
-  @Column({ name: 'max_tvs', type: 'integer', default: 5 })
-  maxTvs: number;
+  @Column({ name: 'total_tvs', type: 'integer', default: 0 })
+  totalTvs: number;
 
   @Column({ type: 'simple-json', nullable: true })
   metadata?: Record<string, any>;

@@ -81,7 +81,7 @@ All collection endpoints (`GET /devices`, `GET /users`, `GET /households`, `GET 
 - **`GLOBAL`**: System-wide admin batches (`device_batches:write_global` required for creation).
 
 ### Household & Multi-TV Architecture
-- **`Household` (`households`)**: Master household (`hhId` PK, `region`, `maxTvs` default: 5).
+- **`Household` (`households`)**: Master household (`hhId` PK, `region`, `totalTvs` dynamic count of TVs in `household_tvs`, max 5 TVs limit per household).
 - **`HouseholdMember` (`household_members`)**: Scoped member records (`M1`, `M2`...).
 - **`HouseholdTv` (`household_tvs`)**: Scoped TV sets (`TV1`, `TV2`... up to max 5 TVs per household). Linked to `installedDeviceId` (`devices.device_id`).
 

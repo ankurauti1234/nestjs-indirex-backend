@@ -25,6 +25,8 @@ import {
 } from './dto/household-tv.dto.js';
 import { paginateQueryBuilder } from '../common/utils/pagination.util.js';
 
+export const MAX_ALLOWED_TVS_PER_HOUSEHOLD = 5;
+
 @Injectable()
 export class HouseholdsService implements OnModuleInit {
   constructor(
@@ -45,11 +47,11 @@ export class HouseholdsService implements OnModuleInit {
   private async seedInitialHouseholds() {
     const count = await this.householdRepository.count();
     if (count === 0) {
-      // Seed initial households HH1000 and HH1001
+      // Seed initial households HH1000 (1 TV) and HH1001 (2 TVs)
       const hh1000 = this.householdRepository.create({
         hhId: 'HH1000',
         region: 'North Zone',
-        maxTvs: 5,
+        totalTvs: 1,
         metadata: { district: 'Central' },
       });
       await this.householdRepository.save(hh1000);
@@ -57,7 +59,7 @@ export class HouseholdsService implements OnModuleInit {
       const hh1001 = this.householdRepository.create({
         hhId: 'HH1001',
         region: 'South Zone',
-        maxTvs: 5,
+        totalTvs: 2,
         metadata: { district: 'Coastal' },
       });
       await this.householdRepository.save(hh1001);
@@ -100,7 +102,7 @@ export class HouseholdsService implements OnModuleInit {
 
       await this.memberRepository.save([m1, m2, m3, m4, m5]);
 
-      // Seed initial TV sets for households
+      // Seed TV sets: HH1000 gets 1 TV, HH1001 gets 2 TVs
       const tv1 = this.tvRepository.create({
         hhId: 'HH1000',
         tvId: 'TV1',
@@ -111,21 +113,21 @@ export class HouseholdsService implements OnModuleInit {
       });
 
       const tv2 = this.tvRepository.create({
-        hhId: 'HH1000',
-        tvId: 'TV2',
-        location: 'Master Bedroom',
-        brand: 'LG',
-        model: 'OLED 43"',
-        screenSizeInches: 43,
-      });
-
-      const tv3 = this.tvRepository.create({
         hhId: 'HH1001',
         tvId: 'TV1',
         location: 'Main Hall',
         brand: 'Sony',
         model: 'Bravia 65"',
         screenSizeInches: 65,
+      });
+
+      const tv3 = this.tvRepository.create({
+        hhId: 'HH1001',
+        tvId: 'TV2',
+        location: 'Master Bedroom',
+        brand: 'LG',
+        model: 'OLED 43"',
+        screenSizeInches: 43,
       });
 
       await this.tvRepository.save([tv1, tv2, tv3]);
@@ -136,7 +138,8 @@ export class HouseholdsService implements OnModuleInit {
     const qb = this.householdRepository
       .createQueryBuilder('hh')
       .leftJoinAndSelect('hh.members', 'members')
-      .leftJoinAndSelect('hh.tvs', 'tvs');
+      .leftJoinAndSelect('hh.tvs', 'tvs')
+      .leftJoinAndSelect('tvs.installedDevice', 'installedDevice');
 
     if (queryDto.region) {
       qb.andWhere('hh.region = :region', { region: queryDto.region });
@@ -249,13 +252,13 @@ export class HouseholdsService implements OnModuleInit {
   }
 
   async createTv(hhId: string, dto: CreateHouseholdTvDto) {
-    const household = await this.findOne(hhId);
+    await this.findOne(hhId);
 
-    // Enforce max 5 TVs limit
+    // Enforce max 5 TVs limit per household
     const existingCount = await this.tvRepository.count({ where: { hhId } });
-    if (existingCount >= (household.maxTvs || 5)) {
+    if (existingCount >= MAX_ALLOWED_TVS_PER_HOUSEHOLD) {
       throw new BadRequestException(
-        `Household '${hhId}' has reached the maximum allowed limit of ${household.maxTvs || 5} TV sets`,
+        `Household '${hhId}' has reached the maximum allowed limit of ${MAX_ALLOWED_TVS_PER_HOUSEHOLD} TV sets`,
       );
     }
 
@@ -295,6 +298,11 @@ export class HouseholdsService implements OnModuleInit {
     });
 
     const savedTv = await this.tvRepository.save(tv);
+
+    // Update totalTvs count on Household
+    const updatedCount = await this.tvRepository.count({ where: { hhId } });
+    await this.householdRepository.update(hhId, { totalTvs: updatedCount });
+
     return this.findOneTv(hhId, savedTv.tvId);
   }
 
@@ -330,6 +338,14 @@ export class HouseholdsService implements OnModuleInit {
   async removeTv(hhId: string, tvId: string) {
     const tv = await this.findOneTv(hhId, tvId);
     await this.tvRepository.remove(tv);
-    return { success: true, message: `TV set '${tvId}' deleted successfully from household '${hhId}'` };
+
+    // Update totalTvs count on Household
+    const updatedCount = await this.tvRepository.count({ where: { hhId } });
+    await this.householdRepository.update(hhId, { totalTvs: updatedCount });
+
+    return {
+      success: true,
+      message: `TV set '${tvId}' deleted successfully from household '${hhId}'`,
+    };
   }
 }
